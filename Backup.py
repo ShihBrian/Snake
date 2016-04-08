@@ -15,7 +15,7 @@ TODO
 
 Current:
 options menu (speed, size, num rooms...)  
-poooop
+
 
 QOL:
 bomb - drop multiple, timer on bomb, bomb chain reaction, 
