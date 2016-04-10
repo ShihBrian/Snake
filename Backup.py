@@ -12,6 +12,17 @@ TODO
 -dark mode
 -boss fight
 -campaign - reach 100 length, boss fight at end, upgrades each round
+- ball and yarn do something
+
+Upgrades:
+- bombsize, probability, 
+- magnetsize, duration, prob
+- tunnel duration, prob
+- score multipler
+- unlock burger, sushi,pizza 
+- teleport uses, prob, number of teleporters allowed
+-timer, collect as much as possible2
+
 
 Current:
 options menu (speed, size, num rooms...)  
@@ -25,20 +36,18 @@ tunnel -  buy ability to tunnel through self
 draw black pixel on corner
 portal - opening animation, place multiple upgradable, 
 
-DONE:
-floor texture
-border image
-redraw floor when tunneling
-redraw wall tunnel, turn inside wall doesnt work 
-wait on collision doesnt work if inside wall,
-snake_collision with tunnel
-tight turn creates wall
-portal - limited use
+
 
 add new object:
 generate_obj
 class object.draw
 collect_object
+
+git commit
+git status
+-git add pygame.py
+git commit -m "comment"
+git push
 """
 
 import pygame
@@ -77,10 +86,11 @@ NUM_ROOMS = 18
 ########PROBABILITIES#########
 PROB_YARN = 10
 PROB_TUNNEL = 1
-PROB_MAGNET = 3
+PROB_MAGNET = 1
 PROB_BOMB = 1
-PROB_BALL = 5
-PROB_PORTAL = 2
+PROB_CANNEDFOOD = 10
+PROB_PORTAL = 1
+PROB_MILK = 50
 ##############################
 
 TUNNEL_DURATION = 10
@@ -232,12 +242,12 @@ class Object:
             screen.blit(bomb_image,(self.x,self.y))
         elif self.type == 'yarn':
             screen.blit(yarn_image,(self.x,self.y))
-        elif self.type == 'cannedfood':
-            screen.blit(cannedfood_image,(self.x,self.y))
+        elif self.type == 'milk':
+            screen.blit(milk_image,(self.x,self.y))
         elif self.type == 'tunnel':
             screen.blit(paw_image,(self.x,self.y))
-        elif self.type == 'ball':
-            screen.blit(ball_image,(self.x,self.y))
+        elif self.type == 'cannedfood':
+            screen.blit(cannedfood_image,(self.x,self.y))
         elif self.type == 'portal':
             screen.blit(portalblue_image,(self.x,self.y))
         
@@ -482,9 +492,9 @@ def collect_object(object):
         num_bombs += 1
         score += object.points
         generate_object(object) 
-    elif object.type == 'cannedfood':
+    elif object.type == 'milk':
         collect_object2(object) 
-    elif object.type == 'ball':
+    elif object.type == 'cannedfood':
         collect_object2(object)
     elif object.type == 'portal':
         if snake_portal:
@@ -558,6 +568,16 @@ def draw_explosion():
 def generate_object(object): 
     Flag = True
     MapFlag = True
+    
+    item_chances = {}
+    item_chances['tunnel'] = PROB_TUNNEL
+    item_chances['magnet'] = PROB_MAGNET
+    item_chances['bomb'] = PROB_BOMB
+    item_chances['cannedfood'] = PROB_CANNEDFOOD
+    item_chances['portal'] = PROB_PORTAL
+    item_chances['milk'] = PROB_MILK
+    
+    
     while Flag:
         x = random.randrange(roundup(100)+BLOCKSIZE,WINDOW_WIDTH-BLOCKSIZE,BLOCKSIZE)
         y = random.randrange(BLOCKSIZE,WINDOW_HEIGHT-BLOCKSIZE,BLOCKSIZE)
@@ -573,30 +593,50 @@ def generate_object(object):
             MapFlag = False
         if SnakeFlag == False and ObjFlag == False and MapFlag == False:
             Flag = False
-    randnum = random.randrange(0, 100)
-    if randnum < PROB_YARN:
-        object.points = 2
-        object.type = 'yarn'
-    elif randnum < PROB_YARN+PROB_TUNNEL:
-        object.points = 3
-        object.type = 'tunnel'
-    elif randnum < PROB_YARN+PROB_TUNNEL+PROB_MAGNET:
-        object.points = 0
-        object.type = 'magnet'
-    elif randnum < PROB_YARN+PROB_TUNNEL+PROB_MAGNET+PROB_BOMB:
-        object.points = 1
-        object.type = 'bomb'
-    elif randnum < PROB_YARN+PROB_TUNNEL+PROB_MAGNET+PROB_BOMB+PROB_BALL:
-        object.points = 3
-        object.type = 'ball'
-    elif randnum < PROB_YARN+PROB_TUNNEL+PROB_MAGNET+PROB_BOMB+PROB_BALL+PROB_PORTAL:
-        object.points = 0
-        object.type = 'portal'                
-    else:
-        object.points = 1 
-        object.type = 'cannedfood'            
+    for i in range(5):
+        choice = random_choice(item_chances)
+        
+        if choice == 'tunnel':
+            object.points = 0
+            object.type = 'tunnel' 
+        elif choice == 'magnet':
+            object.points = 0
+            object.type = 'magnet'
+        elif choice == 'bomb':
+            object.points = 0
+            object.type = 'bomb'
+        elif choice == 'cannedfood':
+            object.points = 2
+            object.type = 'cannedfood'
+        elif choice == 'portal':
+            object.points = 0
+            object.type = 'portal'
+        elif choice == 'milk':
+            object.points = 1
+            object.type = 'milk' 
     object.x = x
     object.y = y
+
+def random_choice_index(chances):  #choose one option from list of chances, returning its index
+    #the dice will land on some number between 1 and the sum of the chances
+    dice = random.randrange(0,sum(chances),1)
+    #go through all chances, keeping the sum so far
+    running_sum = 0
+    choice = 0
+    for w in chances:
+        running_sum += w
+ 
+        #see if the dice landed in the part that corresponds to this choice
+        if dice <= running_sum:
+            return choice
+        choice += 1
+
+def random_choice(chances_dict):
+    #choose one option from dictionary of chances, returning its key
+    chances = chances_dict.values()
+    strings = chances_dict.keys()
+ 
+    return strings[random_choice_index(chances)]
 
 def event_handle():
     global pause
@@ -793,21 +833,21 @@ def check_enter_portal():
 
 def draw_console():
     screen.blit(grass_image,(0,0))
-    text = font36.render(str(score),1,WHITE)
+    text = font20.render(str(score),1,WHITE)
     console.blit(text, (5,30))
     pygame.draw.rect(screen, GREEN, (5, 55, BLOCKSIZE, BLOCKSIZE)) 
     pygame.draw.rect(screen, YELLOW, (5, 80, BLOCKSIZE, BLOCKSIZE))
     pygame.draw.rect(screen, BLACK, (5,110,BLOCKSIZE,BLOCKSIZE)) 
-    text = font36.render(str(int(round(now-starttime,0))),1,WHITE)
+    text = font20.render(str(int(round(now-starttime,0))),1,WHITE)
     console.blit(text, (5,5))
-    text = font36.render(str(num_bombs),1,WHITE)
+    text = font20.render(str(num_bombs),1,WHITE)
     console.blit(text, (30,110))
     
     if snake_tunnel:
-        text = font36.render(str(TUNNEL_DURATION - round(now-tunnelstart,1)),1,WHITE)
+        text = font20.render(str(TUNNEL_DURATION - round(now-tunnelstart,1)),1,WHITE)
         console.blit(text, (25,55))
     if snake_magnet:
-        text = font36.render(str(MAGNET_DURATION - round(now-magnetstart,1)),1,WHITE)
+        text = font20.render(str(MAGNET_DURATION - round(now-magnetstart,1)),1,WHITE)
         console.blit(text, (25,80))         
 
 def drawGrid():
@@ -818,12 +858,12 @@ def drawGrid():
     
 def render_all():
     global snake_portal
-    snake.draw()
     #drawGrid()
     draw_console()
     screen.blit(border_image,(roundup(100),0))
     for object in objects:
         object.draw(screen)
+    snake.draw()
     if snake_portal:
         draw_portals()
     pygame.display.flip()
@@ -896,7 +936,7 @@ def new_game():
     make_map()
     render_map()
     screen.blit(border_image,(roundup(100),0))
-    text = font36.render("Press An Arrow Key To Start",1,BLUE)
+    text = font20.render("Press An Arrow Key To Start",1,BLUE)
     textpos = text.get_rect()
     textpos.centerx = screen.get_rect().centerx
     textpos.centery = screen.get_rect().centery
@@ -936,24 +976,24 @@ def play_game():
 def game_over():
     global game_state, score
     game_state = 'Game Over'
-    screen.fill(BLACK)
-    text = font36.render("Game Over",1,WHITE)
+    screen.blit(game_over_image,(0,0))
+    text = font36.render("Game Over",1,BLACK)
     textpos = text.get_rect()
     textpos.centerx = screen.get_rect().centerx
-    textpos.centery = screen.get_rect().centery
+    textpos.centery = screen.get_rect().centery + 200
     screen.blit(text,textpos)
-    text = font36.render("Score: "+str(score),1,WHITE)
+    text = font36.render("Score: "+str(score),1,BLACK)
     textpos = text.get_rect()
     textpos.centerx = screen.get_rect().centerx
-    textpos.centery = screen.get_rect().centery + 36
+    textpos.centery = screen.get_rect().centery + 236
     screen.blit(text,textpos)
     load_game()
     calc_highscore(score)
     save_game()
-    text = font36.render("Highscore: "+str(highscore),1,WHITE)
+    text = font36.render("Highscore: "+str(highscore),1,BLACK)
     textpos = text.get_rect()
     textpos.centerx = screen.get_rect().centerx
-    textpos.centery = screen.get_rect().centery + 72 
+    textpos.centery = screen.get_rect().centery + 272 
     screen.blit(text,textpos)   
     pygame.display.flip()
     
@@ -1004,7 +1044,6 @@ body_image = load_image('Body.png',WHITE)
 tail_image = load_image('Tail.png',WHITE)
 corner_image = load_image('Body Corner.png',WHITE)
 mouse_image = load_image('mouse.png',WHITE)
-cannedfood_image = load_image('cannedfood.png',WHITE)
 yarn_image = load_image('yarn.png',WHITE)
 wood_image = load_image('wood.png',WHITE)
 wall_image = load_image('wall.png',WHITE)
@@ -1015,17 +1054,20 @@ wall4_image = load_image('wall4.png',WHITE)
 wallcorner_image = load_image('wallcorner.png',WHITE)
 border_image = load_image('border.png',WHITE)
 paw_image = load_image('paw.png',WHITE)
-ball_image = load_image('ball.png',WHITE)
+cannedfood_image = load_image('cannedfood.png',WHITE)
 portalblue_image = load_image('portal.png',WHITE)
 portalpurp_image = load_image('portal2.png',WHITE)
 start_image = load_image('start_screen.png',TRANS)
 grass_image = load_image('grass.png',WHITE)
+milk_image = load_image('milk.png',TRANS)
+game_over_image = load_image('GameOver.png',WHITE)
 ################################
 # Initialization
 ################################
 
 clock = pygame.time.Clock()
-font36 =  pygame.font.Font("Calibri.ttf", 20)
+font20 =  pygame.font.Font("Calibri.ttf", 20)
+font36 =  pygame.font.Font("Calibri.ttf", 36)
 snake = snake()
 Obj1 = Object(0,0, BLUE, 'toy')
 Obj2 = Object(0,0, BLUE, 'toy')

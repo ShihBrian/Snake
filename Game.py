@@ -1,18 +1,21 @@
 """ 
 TODO
 -save function
--items (immune, lives,teleport, tongue,slow time,score multiplier )
+-items (immune, lives,tongue,slow time,score multiplier )
 -options menu (speed, size, num rooms...) 
 -seperate modes (free play, campaign, classic...)
 -rearrange GUI
 -fix obj gen inside snake?
--moving mouse
+-moving mouse for multiplier
 -secret room
 -makes walls thin?
 -dark mode
 -boss fight
 -campaign - reach 100 length, boss fight at end, upgrades each round
 - ball and yarn do something
+- hard mode single block lane -genie
+-traps? -genie
+
 Upgrades:
 - bombsize, probability, 
 - magnetsize, duration, prob
@@ -20,6 +23,7 @@ Upgrades:
 - score multipler
 - unlock burger, sushi,pizza 
 - teleport uses, prob, number of teleporters allowed
+-timer, collect as much as possible2
 
 
 Current:
@@ -34,8 +38,6 @@ tunnel -  buy ability to tunnel through self
 draw black pixel on corner
 portal - opening animation, place multiple upgradable, 
 
-Changes:
-add gameover image
 
 
 add new object:
@@ -44,6 +46,7 @@ class object.draw
 collect_object
 
 git commit
+git status
 -git add pygame.py
 git commit -m "comment"
 git push
@@ -76,7 +79,7 @@ TRANS = (1,1,1)
 WINDOW_WIDTH = 1600
 WINDOW_HEIGHT = 900
 BLOCKSIZE = 20
-GAMESPEED = 12
+GAMESPEED = 15
 MIN_ROOM_SIZE = 140
 MAX_ROOM_SIZE = 220
 NUM_ROOMS = 18
@@ -95,7 +98,7 @@ PROB_MILK = 50
 TUNNEL_DURATION = 10
 MAGNET_DURATION = 10
 MAGRADIUS = 1
-BOMBSIZE = 9
+BOMBSIZE = 13
 BOMB_DURATION = 2
 BULLET_SPEED = 2
 NUM_PORTAL = 3
@@ -242,7 +245,7 @@ class Object:
         elif self.type == 'yarn':
             screen.blit(yarn_image,(self.x,self.y))
         elif self.type == 'milk':
-            screen.blit(milk_image,(self.x,self.y))
+            screen.blit(fish_image,(self.x,self.y))
         elif self.type == 'tunnel':
             screen.blit(paw_image,(self.x,self.y))
         elif self.type == 'cannedfood':
@@ -942,6 +945,8 @@ def new_game():
     screen.blit(text,textpos)
     snake.draw()
     pygame.display.flip()
+    load_game()
+    print BOMBSIZE
     while 1:
         arrow_key()
 
@@ -986,7 +991,6 @@ def game_over():
     textpos.centerx = screen.get_rect().centerx
     textpos.centery = screen.get_rect().centery + 236
     screen.blit(text,textpos)
-    load_game()
     calc_highscore(score)
     save_game()
     text = font36.render("Highscore: "+str(highscore),1,BLACK)
@@ -1010,12 +1014,22 @@ def calc_highscore(score):
 def save_game():
     save = shelve.open('savegame')
     save['highscore'] = highscore
+    save['BOMBSIZE'] = BOMBSIZE
+    save['TUNNEL_DURATION'] = TUNNEL_DURATION
+    save['MAGNET_DURATION'] = MAGNET_DURATION
+    save['MAGRADIUS'] = MAGRADIUS
+    save['NUM_PORTAL'] = NUM_PORTAL
     save.close()
 
 def load_game():
-    global highscore
+    global highscore,BOMBSIZE
     save = shelve.open('savegame')
     highscore = save['highscore']
+    BOMBSIZE = save['BOMBSIZE']
+    TUNNEL_DURATION = save['TUNNEL_DURATION']
+    MAGNET_DURATION = save['MAGNET_DURATION']
+    MAGRADIUS = save['MAGRADIUS']
+    NUM_PORTAL = save['NUM_PORTAL'] 
     save.close()
 
 def load_image(imagename,colour): 
@@ -1060,6 +1074,7 @@ start_image = load_image('start_screen.png',TRANS)
 grass_image = load_image('grass.png',WHITE)
 milk_image = load_image('milk.png',TRANS)
 game_over_image = load_image('GameOver.png',WHITE)
+fish_image = load_image('fish.png', WHITE)
 ################################
 # Initialization
 ################################
