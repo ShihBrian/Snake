@@ -1,7 +1,7 @@
 """ 
 TODO
 -save function
--items (immune, lives,tongue,slow time,score multiplier )
+-items (tongue,slow time,score multiplier )
 -options menu (speed, size, num rooms...) 
 -seperate modes (free play, campaign, classic...)
 -rearrange GUI
@@ -23,8 +23,8 @@ Upgrades:
 - score multipler
 - unlock burger, sushi,pizza 
 - teleport uses, prob, number of teleporters allowed
--timer, collect as much as possible2
-
+- timer, collect as much as possible2
+- more objects spawn
 
 Current:
 options menu (speed, size, num rooms...)  
@@ -57,7 +57,6 @@ import sys
 import random
 import time
 import shelve
-import os
 
 
 ###########COLOURS############
@@ -79,7 +78,7 @@ TRANS = (1,1,1)
 WINDOW_WIDTH = 1600
 WINDOW_HEIGHT = 900
 BLOCKSIZE = 20
-GAMESPEED = 15
+GAMESPEED = 12
 MIN_ROOM_SIZE = 140
 MAX_ROOM_SIZE = 220
 NUM_ROOMS = 18
@@ -90,9 +89,11 @@ PROB_YARN = 10
 PROB_TUNNEL = 1
 PROB_MAGNET = 1
 PROB_BOMB = 1
-PROB_CANNEDFOOD = 10
+PROB_CANNEDFOOD = 20
 PROB_PORTAL = 1
-PROB_MILK = 50
+PROB_WATER = 100
+PROB_HEART = 1
+PROB_FISH = 10
 ##############################
 
 TUNNEL_DURATION = 10
@@ -230,11 +231,10 @@ class Rect:
                 self.y1 <= other.y2 and self.y2 >= other.y1)
         
 class Object:
-    def __init__(self,x,y,colour,type):
+    def __init__(self,x,y,type):
         self.x = x
         self.y = y
         self.points = 1
-        self.colour = colour
         self.type = type
 
     def draw(self,surface):
@@ -244,14 +244,18 @@ class Object:
             screen.blit(bomb_image,(self.x,self.y))
         elif self.type == 'yarn':
             screen.blit(yarn_image,(self.x,self.y))
-        elif self.type == 'milk':
-            screen.blit(fish_image,(self.x,self.y))
+        elif self.type == 'water':
+            screen.blit(water_image,(self.x,self.y))
         elif self.type == 'tunnel':
             screen.blit(paw_image,(self.x,self.y))
         elif self.type == 'cannedfood':
             screen.blit(cannedfood_image,(self.x,self.y))
         elif self.type == 'portal':
             screen.blit(portalblue_image,(self.x,self.y))
+        elif self.type == 'heart':
+            screen.blit(heart_image,(self.x,self.y))
+        elif self.type == 'fish':
+            screen.blit(fish_image,(self.x,self.y))
         
 def roundup(x, base=BLOCKSIZE):
     return int(base * round(float(x)/base))
@@ -276,7 +280,7 @@ def create_v_tunnel(y1, y2, x):
         map_tile[x/BLOCKSIZE][y].blocked = False
 
 def wait_on_collision():
-    global snake_prev
+    global snake_prev, snake_state, hearts
     now = time.time()
     endtime = now + 0.015
     snake.position = snake_prev
@@ -290,7 +294,12 @@ def wait_on_collision():
         if snake.position[1][0]+snake.dx >= WINDOW_WIDTH-BLOCKSIZE or snake.position[1][0]-snake.dx <= roundup(100):
             game_over()
         if snake.position[1][1]+snake.dy >= WINDOW_HEIGHT-BLOCKSIZE or snake.position[1][1]-snake.dy <= 0:
-            game_over()
+            if hearts == 0:
+                game_over()
+            else:
+                temp  = snake.position[snake.length-1]
+                snake.position[0] = temp
+                snake.position[snake.length-1] = snake.position[0]
         else:
             snake.position[0] = (snake.position[1][0]+snake.dx, snake.position[1][1]+snake.dy,snake.dx,snake.dy)
     else:         
@@ -299,12 +308,30 @@ def wait_on_collision():
         if snake.position[1][1]+snake.dy >= WINDOW_HEIGHT-BLOCKSIZE or snake.position[1][1]-snake.dy <= 0:
             game_over()
         if map_tile[(snake.position[1][0])/BLOCKSIZE+snake.dx/BLOCKSIZE][(snake.position[1][1])/BLOCKSIZE+snake.dy/BLOCKSIZE].blocked:
-            game_over()
+            if hearts == 0:
+                game_over()
+            else:
+                if not snake_heart:
+                    choose_redraw_wall(snake.position[0][0]/BLOCKSIZE,snake.position[0][1]/BLOCKSIZE)   
+                    for i in range(4):
+                        flash()
+                    snake_state = 'heart_init'  
+                    hearts -= 1    
         else:
             snake.position[0] = (snake.position[1][0]+snake.dx, snake.position[1][1]+snake.dy,snake.dx,snake.dy)
+
+def flash():
+    for i in snake.position:
+        redraw_floor(wood_image, i[0], i[1])
+    pygame.display.flip()
+    pygame.time.wait(250)
+    snake.draw()
+    pygame.display.flip()
+    pygame.time.wait(250)
+
         
 def make_map():
-    global map_tile
+    global map_tile, first_x, first_y
     rooms = []
     num_rooms = 0
     now = time.time()
@@ -481,20 +508,19 @@ def check_object_intersect():
             
 
 def collect_object(object):
-    global snake_state, num_bombs, score, portalx1, portaly1, portal_in_inv, snake_portal
+    global snake_state, num_bombs, score, portalx1, portaly1, portal_in_inv, snake_portal, hearts
     if object.type == 'yarn':            
         collect_object2(object)
     elif object.type == 'tunnel':
         snake_state = 'tunnel'
-        collect_object2(object)
+        generate_object(object)
     elif object.type == 'magnet':
         snake_state = 'magnet'
-        collect_object2(object)
+        generate_object(object)
     elif object.type == 'bomb':
         num_bombs += 1
-        score += object.points
         generate_object(object) 
-    elif object.type == 'milk':
+    elif object.type == 'water':
         collect_object2(object) 
     elif object.type == 'cannedfood':
         collect_object2(object)
@@ -507,6 +533,11 @@ def collect_object(object):
         portaly1 = object.y
         portal_in_inv = True
         generate_object(object)
+    elif object.type == 'heart':
+        hearts += 1
+        generate_object(object)
+    elif object.type == 'fish':
+        collect_object2(object)
 
 def collect_object2(object):     
     global score 
@@ -577,7 +608,9 @@ def generate_object(object):
     item_chances['bomb'] = PROB_BOMB
     item_chances['cannedfood'] = PROB_CANNEDFOOD
     item_chances['portal'] = PROB_PORTAL
-    item_chances['milk'] = PROB_MILK
+    item_chances['water'] = PROB_WATER
+    item_chances['heart'] = PROB_HEART
+    item_chances['fish'] = PROB_FISH
     
     
     while Flag:
@@ -597,7 +630,6 @@ def generate_object(object):
             Flag = False
     for i in range(5):
         choice = random_choice(item_chances)
-        
         if choice == 'tunnel':
             object.points = 0
             object.type = 'tunnel' 
@@ -613,9 +645,15 @@ def generate_object(object):
         elif choice == 'portal':
             object.points = 0
             object.type = 'portal'
-        elif choice == 'milk':
+        elif choice == 'water':
             object.points = 1
-            object.type = 'milk' 
+            object.type = 'water' 
+        elif choice == 'heart':
+            object.point = 0
+            object.type = 'heart'
+        elif choice == 'fish':
+            object.point = 3
+            object.type = 'fish'
     object.x = x
     object.y = y
 
@@ -682,7 +720,7 @@ def event_handle():
                 elif event.key == pygame.K_SPACE:
                     bullet.x, bullet.y = (snake.position[0][0],snake.position[0][1])
                     bullet.direction((snake.dx,snake.dy))
-                    shoot_bullet()
+                    shoot_bullet() 
                 elif event.key == pygame.K_p:
                     pause = not pause
             elif game_state == 'Game Over':
@@ -692,7 +730,6 @@ def event_handle():
                     new_game() 
         elif event.type == pygame.MOUSEBUTTONUP:
             pos = pygame.mouse.get_pos()
-            print pos
             if game_state == 'Menu':
                 if pos[0] > 700 and pos[0] < 900 and pos[1] > 318 and pos[1] < 361:
                     new_game()
@@ -804,7 +841,7 @@ def check_snake_collision(head_x, head_y):
     for n,i in enumerate(snake.position):
         if ((head_x,head_y) == (i[0],i[1])) and n!= 0:
             wait_on_collision()
-    if snake_tunnel and map_tile[(head_x)/BLOCKSIZE][(head_y)/BLOCKSIZE].blocked:
+    if (snake_tunnel or snake_heart) and map_tile[(head_x)/BLOCKSIZE][(head_y)/BLOCKSIZE].blocked:
         screen.blit(wood_image,(head_x,head_y),(head_x-(roundup(100)+BLOCKSIZE),head_y-BLOCKSIZE, BLOCKSIZE, BLOCKSIZE))
         map_tile[(head_x)/BLOCKSIZE][(head_y)/BLOCKSIZE].blocked = False
         choose_redraw_wall(head_x/BLOCKSIZE,head_y/BLOCKSIZE)
@@ -871,7 +908,7 @@ def render_all():
     pygame.display.flip()
 
 def unique_state(state):
-    global tunnelstart, tunnelend, snake_tunnel, magnetstart, magnetend, snake_magnet, now, snake_state, bombdropped, bombend, bombstart
+    global tunnelstart, tunnelend, snake_tunnel, magnetstart, magnetend, snake_magnet, now, snake_state, bombdropped, bombend, bombstart, snake_heart, heartend
     now = time.time()    
     if snake_state != prev_snake_state and snake_state == state:
         if state == 'tunnel':
@@ -879,11 +916,16 @@ def unique_state(state):
             tunnelend = tunnelstart + TUNNEL_DURATION
             snake_tunnel = True
             snake_state = 'normal' 
-        if state == 'magnet':
+        elif state == 'magnet':
             magnetstart = now
             magnetend = magnetstart + MAGNET_DURATION
             snake_magnet = True
             snake_state = 'normal'
+        elif state == 'heart_init':
+            heartstart = now
+            heartend = heartstart + 1
+            snake_heart = True
+            snake_state = 'normal' 
     if snake_state == 'bomb':
             bombstart = now
             bombend = bombstart + BOMB_DURATION
@@ -902,8 +944,10 @@ def unique_state(state):
                 explode_bomb()
         else:
             screen.blit(bomb_image,(bombx,bomby))
+    if snake_heart:
+        if now > heartend:
+            snake_heart = False
 
-            
 def draw_portals():
         
         screen.blit(portalblue_image,(portalx1,portaly1)) 
@@ -918,7 +962,7 @@ def main_menu():
         event_handle()
 
 def new_game():
-    global game_state,score, snake_state, snake_tunnel, snake_magnet, starttime, bombdropped, num_bombs, snake_bullet,pause, snake_portal, portal_in_inv, portal_use
+    global game_state,score, snake_state, snake_tunnel, snake_magnet, starttime, bombdropped, num_bombs, snake_bullet,pause, snake_portal, portal_in_inv, portal_use, hearts, snake_heart
     game_state = 'New Game'
     screen.blit(grass_image,(0,0))
     snake.direction((BLOCKSIZE,0))
@@ -935,6 +979,8 @@ def new_game():
     snake_bullet = False
     pause = False
     portal_in_inv = False
+    snake_heart = False
+    hearts = 0
     make_map()
     render_map()
     screen.blit(border_image,(roundup(100),0))
@@ -946,7 +992,6 @@ def new_game():
     snake.draw()
     pygame.display.flip()
     load_game()
-    print BOMBSIZE
     while 1:
         arrow_key()
 
@@ -966,14 +1011,15 @@ def play_game():
             unique_state('tunnel')
             unique_state('magnet')
             unique_state('bomb')
+            unique_state('heart_init')
             if snake_bullet == True:
                 shoot_bullet()
             snake.move() 
             check_enter_portal()
+            prev_snake_state = snake_state
             check_snake_collision(snake.position[0][0], snake.position[0][1])
             render_all()
             event_handle()
-            prev_snake_state = snake_state
         else:
             event_handle()
         
@@ -1019,6 +1065,7 @@ def save_game():
     save['MAGNET_DURATION'] = MAGNET_DURATION
     save['MAGRADIUS'] = MAGRADIUS
     save['NUM_PORTAL'] = NUM_PORTAL
+    save['GAMESPEED'] = GAMESPEED
     save.close()
 
 def load_game():
@@ -1072,9 +1119,10 @@ portalblue_image = load_image('portal.png',WHITE)
 portalpurp_image = load_image('portal2.png',WHITE)
 start_image = load_image('start_screen.png',TRANS)
 grass_image = load_image('grass.png',WHITE)
-milk_image = load_image('milk.png',TRANS)
+water_image = load_image('water.png',WHITE)
 game_over_image = load_image('GameOver.png',WHITE)
 fish_image = load_image('fish.png', WHITE)
+heart_image = load_image('heart.png',WHITE)
 ################################
 # Initialization
 ################################
@@ -1083,11 +1131,11 @@ clock = pygame.time.Clock()
 font20 =  pygame.font.Font("Calibri.ttf", 20)
 font36 =  pygame.font.Font("Calibri.ttf", 36)
 snake = snake()
-Obj1 = Object(0,0, BLUE, 'toy')
-Obj2 = Object(0,0, BLUE, 'toy')
-Obj3 = Object(0,0, BLUE, 'toy')
-Obj4 = Object(0,0, BLUE, 'toy')
-Obj5 = Object(0,0, BLUE, 'toy')
+Obj1 = Object(0,0, 'toy')
+Obj2 = Object(0,0, 'toy')
+Obj3 = Object(0,0, 'toy')
+Obj4 = Object(0,0, 'toy')
+Obj5 = Object(0,0, 'toy')
 objects = [Obj1, Obj2, Obj3, Obj4, Obj5]
 bullet = projectile(0,0)
 highscore = 0
