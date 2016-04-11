@@ -25,9 +25,11 @@ Upgrades:
 - teleport uses, prob, number of teleporters allowed
 - timer, collect as much as possible2
 - more objects spawn
+- add object
+- heart time for tunnel increase
 
 Current:
-options menu (speed, size, num rooms...)  
+score multiplier 
 
 
 QOL:
@@ -57,6 +59,7 @@ import sys
 import random
 import time
 import shelve
+import os
 
 
 ###########COLOURS############
@@ -79,21 +82,22 @@ WINDOW_WIDTH = 1600
 WINDOW_HEIGHT = 900
 BLOCKSIZE = 20
 GAMESPEED = 12
-MIN_ROOM_SIZE = 140
-MAX_ROOM_SIZE = 220
-NUM_ROOMS = 18
+MIN_ROOM_SIZE = 120 #120
+MAX_ROOM_SIZE = 200 #200
+NUM_ROOMS = 20
 ##############################
 
 ########PROBABILITIES#########
 PROB_YARN = 10
-PROB_TUNNEL = 1
-PROB_MAGNET = 1
-PROB_BOMB = 1
-PROB_CANNEDFOOD = 20
-PROB_PORTAL = 1
-PROB_WATER = 100
-PROB_HEART = 1
-PROB_FISH = 10
+PROB_TUNNEL = 2
+PROB_MAGNET = 5
+PROB_BOMB = 5
+PROB_CANNEDFOOD = 40
+PROB_PORTAL = 5
+PROB_WATER = 200
+PROB_HEART = 2
+PROB_FISH = 20
+PROB_MOUSE = 1000
 ##############################
 
 TUNNEL_DURATION = 10
@@ -103,6 +107,9 @@ BOMBSIZE = 13
 BOMB_DURATION = 2
 BULLET_SPEED = 2
 NUM_PORTAL = 3
+HEART_DURATION = 1
+MULTDURATION = 10
+MULTIPLIER = 2
 
 class Tile:
     #a tile of the map and its properties
@@ -211,7 +218,6 @@ class snake:
         else:
             screen.blit(body,(self.position[1][0],self.position[1][1]))
         
-
 class Rect:
     #a rectangle on the map. used to characterize a room.
     def __init__(self, x, y, w, h):
@@ -229,6 +235,10 @@ class Rect:
         #returns true if this rectangle intersects with another one
         return (self.x1 <= other.x2 and self.x2 >= other.x1 and
                 self.y1 <= other.y2 and self.y2 >= other.y1)
+    
+    def room_intersect(self,other):
+        return (self.x1-BLOCKSIZE <= other.x2 and self.x2+BLOCKSIZE >= other.x1 and
+                self.y1-BLOCKSIZE <= other.y2 and self.y2+BLOCKSIZE >= other.y1)
         
 class Object:
     def __init__(self,x,y,type):
@@ -256,7 +266,10 @@ class Object:
             screen.blit(heart_image,(self.x,self.y))
         elif self.type == 'fish':
             screen.blit(fish_image,(self.x,self.y))
+        elif self.type == 'mouse':
+            screen.blit(mouse_image,(self.x,self.y))
         
+
 def roundup(x, base=BLOCKSIZE):
     return int(base * round(float(x)/base))
 
@@ -328,8 +341,7 @@ def flash():
     snake.draw()
     pygame.display.flip()
     pygame.time.wait(250)
-
-        
+       
 def make_map():
     global map_tile, first_x, first_y
     rooms = []
@@ -364,7 +376,7 @@ def make_map():
             break
         failed = False
         for other_room in rooms:
-            if new_room.intersect(other_room):
+            if new_room.room_intersect(other_room):
                 failed = True
                 break
             
@@ -400,6 +412,7 @@ def make_map():
     create_h_tunnel(last_x, first_x, last_y+BLOCKSIZE)
     create_v_tunnel(last_y, first_y, first_x)
     create_v_tunnel(last_y, first_y, first_x-BLOCKSIZE)
+
 
 def render_map():
     screen.blit(wood_image,(120,20))    
@@ -491,7 +504,7 @@ def choose_wall_image(map_x,map_y):
         return wall4_image
         
 def check_object_intersect():
-    for object in objects:
+    for object in objects:               
         if snake_magnet:
             snakex = snake.position[0][0]-MAGRADIUS*BLOCKSIZE
             snakex2 = snake.position[0][0]+(MAGRADIUS+1)*BLOCKSIZE
@@ -508,7 +521,7 @@ def check_object_intersect():
             
 
 def collect_object(object):
-    global snake_state, num_bombs, score, portalx1, portaly1, portal_in_inv, snake_portal, hearts
+    global snake_state, num_bombs, score, portalx1, portaly1, portal_in_inv, snake_portal, hearts, multiplier
     if object.type == 'yarn':            
         collect_object2(object)
     elif object.type == 'tunnel':
@@ -538,12 +551,15 @@ def collect_object(object):
         generate_object(object)
     elif object.type == 'fish':
         collect_object2(object)
+    elif object.type == 'mouse':
+        snake_state = 'multiplier'
+        collect_object2(object)
 
 def collect_object2(object):     
     global score 
     snake.position.append(snake.position[snake.length-1])
     snake.length += 1
-    score += object.points
+    score += object.points*multiplier
     generate_object(object)
     
 def check_coord_match(x1, y1, x2, y2):
@@ -597,7 +613,62 @@ def draw_explosion():
         screen.blit(explosion_image13,(bombx-(factor-1)*BLOCKSIZE, bomby-(factor-1)*BLOCKSIZE))
     else:
         screen.blit(explosion_image15,(bombx-(factor-1)*BLOCKSIZE, bomby-(factor-1)*BLOCKSIZE))
+
+def mouse_move(object):
+    global mouse_dx, mouse_dy
+    image = mouse_image
+    redraw_floor(wood_image, object.x, object.y)
+    while 1:
+        if mouse_dx == BLOCKSIZE:
+            choice = choose_direction([10,10,10,70])
+        elif mouse_dx == -BLOCKSIZE:
+            choice = choose_direction([10,10,70,10])
+        elif mouse_dy == BLOCKSIZE:
+            choice = choose_direction([10,70,10,10])
+        elif mouse_dy == -BLOCKSIZE:
+            choice = choose_direction([70,10,10,10])
+        else:
+            choice = choose_direction([25,25,25,25])
+        
+        if choice == 'UP' and mouse_dy != BLOCKSIZE:
+            mouse_dx = 0
+            mouse_dy = -1*BLOCKSIZE
+            image = pygame.transform.rotate(mouse_image,90)
+        elif choice == 'DOWN' and mouse_dy != -1*BLOCKSIZE:
+            mouse_dx = 0
+            mouse_dy = BLOCKSIZE
+            image = pygame.transform.rotate(mouse_image,270)        
+        elif choice == 'RIGHT' and mouse_dx != -1*BLOCKSIZE:
+            mouse_dx = BLOCKSIZE
+            mouse_dy = 0  
+            image = mouse_image         
+        elif choice == 'LEFT' and mouse_dx != BLOCKSIZE:
+            mouse_dx = -1*BLOCKSIZE
+            mouse_dy = 0
+            image = pygame.transform.rotate(mouse_image,180)  
+                                
+        for n,i in enumerate(snake.position):
+            if n != 0:
+                if object.x == i[0] and object.y == i[1]:
+                    in_snake = True
+                    break
+                else:
+                    in_snake = False             
+        if map_tile[object.x/BLOCKSIZE+mouse_dx/BLOCKSIZE][object.y/BLOCKSIZE+mouse_dy/BLOCKSIZE].blocked == False and not in_snake:
+                object.x += mouse_dx
+                object.y += mouse_dy
+                break
     
+    screen.blit(image,(object.x,object.y))
+    
+def choose_direction(chances):
+    direction_chances = {}
+    direction_chances['UP'] = chances[0]
+    direction_chances['DOWN'] = chances[1]
+    direction_chances['LEFT'] = chances[2]
+    direction_chances['RIGHT'] = chances[3]
+    return random_choice(direction_chances)    
+        
 def generate_object(object): 
     Flag = True
     MapFlag = True
@@ -611,6 +682,7 @@ def generate_object(object):
     item_chances['water'] = PROB_WATER
     item_chances['heart'] = PROB_HEART
     item_chances['fish'] = PROB_FISH
+    item_chances['mouse'] = PROB_MOUSE
     
     
     while Flag:
@@ -649,11 +721,14 @@ def generate_object(object):
             object.points = 1
             object.type = 'water' 
         elif choice == 'heart':
-            object.point = 0
+            object.points = 0
             object.type = 'heart'
         elif choice == 'fish':
-            object.point = 3
+            object.points = 3
             object.type = 'fish'
+        elif choice == 'mouse':
+            object.points = 5
+            object.type = 'mouse'
     object.x = x
     object.y = y
 
@@ -901,14 +976,19 @@ def render_all():
     draw_console()
     screen.blit(border_image,(roundup(100),0))
     for object in objects:
-        object.draw(screen)
+        if object.type == 'mouse':
+            time = now-starttime
+            if (time % 0.4) < 0.10:
+                mouse_move(object)
+        else:
+            object.draw(screen)
     snake.draw()
     if snake_portal:
         draw_portals()
     pygame.display.flip()
 
 def unique_state(state):
-    global tunnelstart, tunnelend, snake_tunnel, magnetstart, magnetend, snake_magnet, now, snake_state, bombdropped, bombend, bombstart, snake_heart, heartend
+    global tunnelstart, tunnelend, snake_tunnel, magnetstart, magnetend, snake_magnet, now, snake_state, bombdropped, bombend, bombstart, snake_heart, heartend, multiplierend, multiplierstart, multipler, snake_mult
     now = time.time()    
     if snake_state != prev_snake_state and snake_state == state:
         if state == 'tunnel':
@@ -923,9 +1003,15 @@ def unique_state(state):
             snake_state = 'normal'
         elif state == 'heart_init':
             heartstart = now
-            heartend = heartstart + 1
+            heartend = heartstart + HEART_DURATION
             snake_heart = True
             snake_state = 'normal' 
+        elif state == 'multiplier':
+            multiplier = MULTIPLIER
+            multiplierstart = now
+            multiplierend = multiplierstart + MULTDURATION
+            snake_mult = True
+            snake_state = 'normal'
     if snake_state == 'bomb':
             bombstart = now
             bombend = bombstart + BOMB_DURATION
@@ -947,6 +1033,10 @@ def unique_state(state):
     if snake_heart:
         if now > heartend:
             snake_heart = False
+    if snake_mult:
+        if now > multiplierend:
+            snake_mult = False
+            multipler = 1
 
 def draw_portals():
         
@@ -962,7 +1052,8 @@ def main_menu():
         event_handle()
 
 def new_game():
-    global game_state,score, snake_state, snake_tunnel, snake_magnet, starttime, bombdropped, num_bombs, snake_bullet,pause, snake_portal, portal_in_inv, portal_use, hearts, snake_heart
+    global game_state,score, snake_state, snake_tunnel, snake_magnet, starttime, bombdropped, num_bombs, snake_bullet,pause, snake_portal 
+    global portal_in_inv, portal_use, hearts, snake_heart, mouse_object, mouse_dx, mouse_dy, multiplier, snake_mult
     game_state = 'New Game'
     screen.blit(grass_image,(0,0))
     snake.direction((BLOCKSIZE,0))
@@ -980,6 +1071,11 @@ def new_game():
     pause = False
     portal_in_inv = False
     snake_heart = False
+    mouse_object = False
+    snake_mult = False
+    mouse_dx = 0
+    mouse_dy = 0
+    multiplier = 1
     hearts = 0
     make_map()
     render_map()
@@ -1006,17 +1102,18 @@ def play_game():
     while 1:
         if not pause:
             clock.tick(GAMESPEED)
+            prev_snake_state = snake_state
             check_object_intersect()
             snake_prev = snake.position
             unique_state('tunnel')
             unique_state('magnet')
             unique_state('bomb')
             unique_state('heart_init')
+            unique_state('multiplier')
             if snake_bullet == True:
                 shoot_bullet()
             snake.move() 
             check_enter_portal()
-            prev_snake_state = snake_state
             check_snake_collision(snake.position[0][0], snake.position[0][1])
             render_all()
             event_handle()
@@ -1085,6 +1182,11 @@ def load_image(imagename,colour):
     image.set_colorkey(colour)
     return image
 
+def add_object():
+    obj = Object(0,0, 'unassigned')
+    objects.append(obj)
+    generate_object(objects[-1])
+
 ################################
 # Image Initialization
 ################################  
@@ -1131,12 +1233,10 @@ clock = pygame.time.Clock()
 font20 =  pygame.font.Font("Calibri.ttf", 20)
 font36 =  pygame.font.Font("Calibri.ttf", 36)
 snake = snake()
-Obj1 = Object(0,0, 'toy')
-Obj2 = Object(0,0, 'toy')
-Obj3 = Object(0,0, 'toy')
-Obj4 = Object(0,0, 'toy')
-Obj5 = Object(0,0, 'toy')
-objects = [Obj1, Obj2, Obj3, Obj4, Obj5]
+Obj1 = Object(0,0, 'unassigned')
+Obj2 = Object(0,0, 'unassigned')
+Obj3 = Object(0,0, 'unassigned')
+objects = [Obj1, Obj2, Obj3]
 bullet = projectile(0,0)
 highscore = 0
 main_menu()
