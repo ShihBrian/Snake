@@ -1,3 +1,6 @@
 start 200x43@ 700,318
 options 200x43 @ 700,382
 quit 200x43 @ 700,445
+
+upgrade
+button 80x80 @ 20,20

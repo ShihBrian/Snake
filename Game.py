@@ -11,25 +11,26 @@ TODO
 -makes walls thin?
 -dark mode
 -boss fight
--campaign - reach 100 length, boss fight at end, upgrades each round
+-campaign - reach 100 length, boss fight at end, upgrades each round or collect as many points as possible within 5 min, boss at end
 - ball and yarn do something
 - hard mode single block lane -genie
 -traps? -genie
+heart console display, hitting self
+better food as length gets longer
+clean up code, make modules
 
 Upgrades:
 - bombsize, probability, 
 - magnetsize, duration, prob
 - tunnel duration, prob
 - score multipler
-- unlock burger, sushi,pizza 
 - teleport uses, prob, number of teleporters allowed
-- timer, collect as much as possible2
 - more objects spawn
-- add object
 - heart time for tunnel increase
 
 Current:
-score multiplier 
+
+
 
 
 QOL:
@@ -39,8 +40,7 @@ magnet field image, no magnet through wall
 tunnel -  buy ability to tunnel through self
 draw black pixel on corner
 portal - opening animation, place multiple upgradable, 
-
-
+heart - hit self
 
 add new object:
 generate_obj
@@ -60,6 +60,7 @@ import random
 import time
 import shelve
 import os
+import math
 
 
 ###########COLOURS############
@@ -85,6 +86,7 @@ GAMESPEED = 12
 MIN_ROOM_SIZE = 120 #120
 MAX_ROOM_SIZE = 200 #200
 NUM_ROOMS = 20
+NUM_OBJECTS = 3
 ##############################
 
 ########PROBABILITIES#########
@@ -97,7 +99,7 @@ PROB_PORTAL = 5
 PROB_WATER = 200
 PROB_HEART = 2
 PROB_FISH = 20
-PROB_MOUSE = 1000
+PROB_MOUSE = 1
 ##############################
 
 TUNNEL_DURATION = 10
@@ -413,7 +415,6 @@ def make_map():
     create_v_tunnel(last_y, first_y, first_x)
     create_v_tunnel(last_y, first_y, first_x-BLOCKSIZE)
 
-
 def render_map():
     screen.blit(wood_image,(120,20))    
     for y in range(0, WINDOW_HEIGHT/BLOCKSIZE):
@@ -519,7 +520,6 @@ def check_object_intersect():
             redraw_floor(wood_image,object.x,object.y) 
             collect_object(object)
             
-
 def collect_object(object):
     global snake_state, num_bombs, score, portalx1, portaly1, portal_in_inv, snake_portal, hearts, multiplier
     if object.type == 'yarn':            
@@ -761,6 +761,7 @@ def event_handle():
         elif event.type == pygame.KEYDOWN:
             if game_state == 'Menu':
                 if event.key == pygame.K_1:
+                    #load_save()
                     new_game()
                 elif event.key == pygame.K_2 or event.key == pygame.K_ESCAPE:
                     sys.exit()                  
@@ -803,13 +804,92 @@ def event_handle():
                     main_menu()
                 elif event.key == pygame.K_RETURN:
                     new_game() 
+                elif event.key == pygame.K_SPACE:
+                    upgrade_menu()
+            elif game_state == 'Upgrade':
+                if event.key == pygame.K_ESCAPE:
+                    main_menu()
+                elif event.key == pygame.K_RETURN:
+                    new_game() 
+        elif event.type == pygame.MOUSEMOTION:
+            pos = pygame.mouse.get_pos()
+            if game_state == 'Upgrade':
+                check_mouse_hover(pos[0],pos[1])
+                pygame.display.update((564,20,408,136))
         elif event.type == pygame.MOUSEBUTTONUP:
             pos = pygame.mouse.get_pos()
             if game_state == 'Menu':
                 if pos[0] > 700 and pos[0] < 900 and pos[1] > 318 and pos[1] < 361:
                     new_game()
                 if pos[0] > 700 and pos[0] < 900 and pos[1] > 445 and pos[1] < 488:
-                    sys.exit()   
+                    sys.exit()
+            elif game_state == 'Game Over':
+                if pos[0] > 680 and pos[0] < 880 and pos[1] > 630 and pos[1] < 674:
+                    upgrade_menu()
+                elif pos[0] > 680 and pos[0] < 880 and pos[1] > 690 and pos[1] < 734:
+                    new_game()
+                elif pos[0] > 680 and pos[0] < 880 and pos[1] > 750 and pos[1] < 794:
+                    main_menu()
+            elif game_state == 'Upgrade':
+                check_click_upgrade(pos[0],pos[1])
+
+def check_click_upgrade(x,y):
+    global BOMBSIZE, score, bomb_size_level, PROB_BOMB, bomb_chance_level
+    if in_circle(x,y,20,130,30):
+        BOMBSIZE += 2
+        bomb_size_level += 1
+        score -= 0
+        screen.blit(shop_image,(0,0))
+    elif in_circle(x,y,120,130,30):
+        PROB_BOMB += 5
+        bomb_chance_level += 1
+        score -= 0
+        screen.blit(shop_image,(0,0))
+    check_mouse_hover(x,y)
+    pygame.display.flip()
+    #save_game()
+
+def check_mouse_hover(x,y):
+    if in_circle(x,y,20,130,30):
+        draw_sentence("Bomb Size Current Level: "+str(bomb_size_level), BLACK,768,58)
+        draw_sentence("Next Level Price: "+str((((bomb_size_level**2)*10)+50)),BLACK,768,110)
+    elif in_circle(x,y,120,130,30):
+        draw_sentence("Bomb Chance Current Level: "+str(bomb_chance_level), BLACK,768,58)
+        draw_sentence("Next Level Price: "+str((((bomb_chance_level**2)*10)+50)),BLACK,768,110)
+    elif in_circle(x,y,20,350,30):
+        draw_sentence("Magnet Duration",BLACK,768,88)
+    elif in_circle(x,y,120,350,30):
+        draw_sentence("Magnet Chance",BLACK,768,88)
+    elif in_circle(x,y,20,570,30):
+        draw_sentence("Tunnel Duration",BLACK,768,88) 
+    elif in_circle(x,y,120,570,30):
+        draw_sentence("Tunnel Chance",BLACK,768,88)    
+    else:
+        screen.blit(shop_image,(0,0))
+
+def draw_sentence(phrase,colour,centerx,centery):      
+    text = font28.render(phrase,0,colour)
+    textpos = text.get_rect()
+    textpos.centerx = centerx
+    textpos.centery = centery
+    screen.blit(text,textpos)
+
+def in_circle(mouse_x,mouse_y,circle_x,circle_y,radius):
+    circle_x += radius
+    circle_y += radius
+    sqx = (mouse_x-circle_x)**2
+    sqy = (mouse_y-circle_y)**2
+    
+    if math.sqrt(sqx+sqy) < radius:
+        return True
+    else:
+        return False
+
+def mouse_upgrade(x,y):
+    global NUM_OBJECTS, score
+    if x > 100 and x < 1500 and y > 20 and y < 800:
+        NUM_OBJECTS = 5
+        score -= 50   
     
 def drop_portal():
     global snake_portal,portalx2,portaly2, portal_use,portal_in_inv
@@ -988,7 +1068,7 @@ def render_all():
     pygame.display.flip()
 
 def unique_state(state):
-    global tunnelstart, tunnelend, snake_tunnel, magnetstart, magnetend, snake_magnet, now, snake_state, bombdropped, bombend, bombstart, snake_heart, heartend, multiplierend, multiplierstart, multipler, snake_mult
+    global tunnelstart, tunnelend, snake_tunnel, magnetstart, magnetend, snake_magnet, now, snake_state, bombdropped, bombend, bombstart, snake_heart, heartend, multiplierend, multiplierstart, multiplier, snake_mult
     now = time.time()    
     if snake_state != prev_snake_state and snake_state == state:
         if state == 'tunnel':
@@ -1036,7 +1116,7 @@ def unique_state(state):
     if snake_mult:
         if now > multiplierend:
             snake_mult = False
-            multipler = 1
+            multiplier = 1
 
 def draw_portals():
         
@@ -1051,16 +1131,22 @@ def main_menu():
     while 1:
         event_handle()
 
+def load_save():
+    load_game()
+    new_game()
+
 def new_game():
     global game_state,score, snake_state, snake_tunnel, snake_magnet, starttime, bombdropped, num_bombs, snake_bullet,pause, snake_portal 
-    global portal_in_inv, portal_use, hearts, snake_heart, mouse_object, mouse_dx, mouse_dy, multiplier, snake_mult
+    global portal_in_inv, portal_use, hearts, snake_heart, mouse_object, mouse_dx, mouse_dy, multiplier, snake_mult, bomb_size_level, bomb_chance_level
     game_state = 'New Game'
     screen.blit(grass_image,(0,0))
     snake.direction((BLOCKSIZE,0))
     snake.length = 3
     snake_state = 'normal'
-    score = 0
+    bomb_size_level = 1
+    bomb_chance_level = 1
     portal_use = NUM_PORTAL
+    score = 0
     snake_tunnel = False
     snake_magnet = False
     snake_portal = False
@@ -1078,6 +1164,8 @@ def new_game():
     multiplier = 1
     hearts = 0
     make_map()
+    for i in range(NUM_OBJECTS):
+        add_object()
     render_map()
     screen.blit(border_image,(roundup(100),0))
     text = font20.render("Press An Arrow Key To Start",1,BLUE)
@@ -1117,32 +1205,30 @@ def play_game():
             check_snake_collision(snake.position[0][0], snake.position[0][1])
             render_all()
             event_handle()
+            print BOMBSIZE
         else:
             event_handle()
         
 def game_over():
     global game_state, score
+    for i in range(NUM_OBJECTS):
+        objects.pop()
     game_state = 'Game Over'
     screen.blit(game_over_image,(0,0))
-    text = font36.render("Game Over",1,BLACK)
-    textpos = text.get_rect()
-    textpos.centerx = screen.get_rect().centerx
-    textpos.centery = screen.get_rect().centery + 200
-    screen.blit(text,textpos)
-    text = font36.render("Score: "+str(score),1,BLACK)
-    textpos = text.get_rect()
-    textpos.centerx = screen.get_rect().centerx
-    textpos.centery = screen.get_rect().centery + 236
-    screen.blit(text,textpos)
-    calc_highscore(score)
-    save_game()
-    text = font36.render("Highscore: "+str(highscore),1,BLACK)
-    textpos = text.get_rect()
-    textpos.centerx = screen.get_rect().centerx
-    textpos.centery = screen.get_rect().centery + 272 
-    screen.blit(text,textpos)   
+    draw_sentence("Upgrades", BLACK, 780, 652)
+    draw_sentence("Restart", BLACK, 780, 712)
+    draw_sentence("Menu", BLACK, 780, 772)
     pygame.display.flip()
-    
+    save_game()
+    while 1:
+        event_handle()
+
+def upgrade_menu():
+    global game_state
+    game_state = 'Upgrade'
+    screen.fill(BLACK)
+    screen.blit(shop_image,(0,0))
+    pygame.display.flip()
     while 1:
         event_handle()
         
@@ -1163,10 +1249,11 @@ def save_game():
     save['MAGRADIUS'] = MAGRADIUS
     save['NUM_PORTAL'] = NUM_PORTAL
     save['GAMESPEED'] = GAMESPEED
+    save['score'] = score
     save.close()
 
 def load_game():
-    global highscore,BOMBSIZE
+    global highscore,BOMBSIZE, TUNNEL_DURATION, MAGNET_DURATION, MAGRADIUS, NUM_PORTAL, score
     save = shelve.open('savegame')
     highscore = save['highscore']
     BOMBSIZE = save['BOMBSIZE']
@@ -1174,6 +1261,7 @@ def load_game():
     MAGNET_DURATION = save['MAGNET_DURATION']
     MAGRADIUS = save['MAGRADIUS']
     NUM_PORTAL = save['NUM_PORTAL'] 
+    score = save['score']
     save.close()
 
 def load_image(imagename,colour): 
@@ -1225,6 +1313,7 @@ water_image = load_image('water.png',WHITE)
 game_over_image = load_image('GameOver.png',WHITE)
 fish_image = load_image('fish.png', WHITE)
 heart_image = load_image('heart.png',WHITE)
+shop_image = load_image('shop.png', TRANS)
 ################################
 # Initialization
 ################################
@@ -1232,11 +1321,10 @@ heart_image = load_image('heart.png',WHITE)
 clock = pygame.time.Clock()
 font20 =  pygame.font.Font("Calibri.ttf", 20)
 font36 =  pygame.font.Font("Calibri.ttf", 36)
+font24 =  pygame.font.Font("Calibri.ttf", 24)
+font28 =  pygame.font.Font("Calibri.ttf", 28)
 snake = snake()
-Obj1 = Object(0,0, 'unassigned')
-Obj2 = Object(0,0, 'unassigned')
-Obj3 = Object(0,0, 'unassigned')
-objects = [Obj1, Obj2, Obj3]
+objects = []
 bullet = projectile(0,0)
 highscore = 0
 main_menu()
